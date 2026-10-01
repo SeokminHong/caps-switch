@@ -2,7 +2,35 @@ import AppKit
 import CapsSwitchCore
 import ServiceManagement
 
+private final class GuideStackView: NSStackView {
+  override var isFlipped: Bool { true }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
+  func checkGuideLayout() throws {
+    configureWindow()
+    refreshStatus()
+    guard let content = window.contentView,
+      let scroll = content.subviews.first as? NSScrollView,
+      let stack = scroll.documentView as? NSStackView
+    else { throw KeyboardError.failure("안내 화면을 찾지 못했습니다.") }
+    content.layoutSubtreeIfNeeded()
+    stack.layoutSubtreeIfNeeded()
+    let images = stack.arrangedSubviews.compactMap { $0 as? NSImageView }
+    guard images.count == 2, images.allSatisfy({ $0.image != nil && $0.frame.width > 0 }),
+      stack.frame.height > scroll.contentView.bounds.height
+    else { throw KeyboardError.failure("안내 이미지 또는 스크롤 영역을 확인하지 못했습니다.") }
+    for (index, view) in stack.arrangedSubviews.enumerated() where view is NSImageView {
+      guard index > 0,
+        let label = stack.arrangedSubviews[index - 1] as? NSTextField,
+        label.frame.width > 0,
+        label.frame.maxY <= view.frame.minY
+      else {
+        throw KeyboardError.failure("설명과 안내 이미지의 배치를 확인하지 못했습니다.")
+      }
+    }
+    print("Guide images: \(images.count), content height: \(stack.frame.height)")
+  }
   private var session = MappingSession(targetKey: AppSettings.targetKey)
   private lazy var hotkey = CapsHotkey { [weak self] in
     do { try CapsLock.toggle() } catch { self?.showError(error) }
@@ -64,16 +92,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   private func configureWindow() {
     window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 560, height: 720),
-      styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false
+      contentRect: NSRect(x: 0, y: 0, width: 780, height: 760),
+      styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false
     )
     window.title = "Caps Switch"
     window.isReleasedWhenClosed = false
+    window.minSize = NSSize(width: 600, height: 500)
     window.center()
-    let stack = NSStackView()
+    let stack = GuideStackView()
     stack.orientation = .vertical
     stack.alignment = .leading
     stack.spacing = 16
+    stack.edgeInsets = NSEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
     stack.translatesAutoresizingMaskIntoConstraints = false
     let title = NSTextField(labelWithString: "Caps Lock으로 입력 소스 전환")
     title.font = .systemFont(ofSize: 22, weight: .semibold)
@@ -101,22 +131,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         "창을 닫아도 메뉴 막대에서 계속 실행합니다. 사용 중지하거나 앱을 종료하면 이 앱이 변경한 Caps Lock 매핑을 복원합니다."
     )
     note.textColor = .secondaryLabelColor
+    let firstStep = NSTextField(
+      wrappingLabelWithString:
+        "1. 위 버튼으로 Caps Lock 전환 사용을 시작하세요.")
+    let capsStep = NSTextField(
+      wrappingLabelWithString:
+        "2. 시스템 설정 → 키보드 → 텍스트 입력 → 편집… → 모든 입력 소스에서 ‘Caps Lock 키로 ABC 입력 소스 전환’을 비활성화하고 ‘완료’를 클릭하세요."
+    )
+    let capsImage = guideImage(named: "caps-lock-input-source")
+    let shortcutImage = guideImage(named: "input-source-shortcut")
+    let imageNote = NSTextField(
+      wrappingLabelWithString:
+        "위 이미지는 F18 설정 예시입니다. 다른 펑션 키를 선택했다면 해당 키 이름으로 표시되는지 확인하세요.")
     for view in [
       title, description, keyLabel, keySelector, statusLabel, toggleButton, loginButton, heading,
-      guide,
+      firstStep, capsStep, capsImage, guide, shortcutImage, imageNote,
       settings, shortcutLabel, note,
     ] {
       stack.addArrangedSubview(view)
-      view.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor).isActive = true
+      view.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor, constant: -48).isActive =
+        true
+      if view is NSTextField {
+        view.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48).isActive = true
+      }
+    }
+    for view in [capsImage, shortcutImage] {
+      view.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48).isActive = true
     }
     guard let content = window.contentView else { return }
-    content.addSubview(stack)
+    let scroll = NSScrollView()
+    scroll.hasVerticalScroller = true
+    scroll.autohidesScrollers = true
+    scroll.drawsBackground = false
+    scroll.translatesAutoresizingMaskIntoConstraints = false
+    content.addSubview(scroll)
+    scroll.documentView = stack
     NSLayoutConstraint.activate([
-      stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
-      stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
-      stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 24),
-      stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -24),
+      scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+      scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+      scroll.topAnchor.constraint(equalTo: content.topAnchor),
+      scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+      stack.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
     ])
+  }
+
+  private func guideImage(named name: String) -> NSImageView {
+    let view = NSImageView()
+    if let url = Bundle.main.url(forResource: name, withExtension: "png"),
+      let image = NSImage(contentsOf: url)
+    {
+      view.image = image
+      view.imageScaling = .scaleProportionallyUpOrDown
+      view.setContentHuggingPriority(.defaultLow, for: .horizontal)
+      view.setContentHuggingPriority(.defaultLow, for: .vertical)
+      view.heightAnchor.constraint(
+        equalTo: view.widthAnchor, multiplier: image.size.height / image.size.width
+      ).isActive = true
+    }
+    return view
   }
 
   @objc private func showWindow() {
@@ -202,9 +274,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let keyName = session.targetKey.name
     loginButton.state = SMAppService.mainApp.status == .enabled ? .on : .off
     guide.stringValue =
-      "1. 위 버튼으로 Caps Lock 전환 사용을 시작하세요.\n\n"
-      + "2. 시스템 설정 → 키보드 → 텍스트 입력 → 편집… → 모든 입력 소스에서 ‘Caps Lock 키로 ABC 입력 소스 전환’을 비활성화하세요.\n\n"
-      + "3. 키보드 → 키보드 단축키… → 입력 소스에서 ‘이전 입력 소스 선택’을 활성화하세요. 키 조합을 두 번 클릭한 다음 Caps Lock을 누르고 \(keyName)으로 표시되는지 확인하세요. ‘완료’를 클릭하세요."
+      "3. 키보드 → 키보드 단축키… → 입력 소스에서 ‘이전 입력 소스 선택’을 활성화하세요. 키 조합을 두 번 클릭한 다음 Caps Lock을 누르고 \(keyName)으로 표시되는지 확인하세요. ‘완료’를 클릭하세요."
     let configured = InputShortcut.isConfigured(for: session.targetKey)
     shortcutLabel.stringValue =
       configured
