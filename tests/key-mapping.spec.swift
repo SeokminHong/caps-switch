@@ -3,6 +3,17 @@ import XCTest
 @testable import CapsSwitchCore
 
 final class KeyMappingTests: XCTestCase {
+  func testAllFunctionKeysApplyAndRestore() throws {
+    for key in FunctionKey.allCases {
+      let backend = MemoryBackend(mappings: [previousCaps, unrelated])
+      let session = MappingSession(backend: backend, targetKey: key)
+      try session.apply()
+      XCTAssertEqual(backend.keyboards[0].mappings, [unrelated, MappingPolicy.mapping(to: key)])
+      try session.restore()
+      XCTAssertEqual(backend.keyboards[0].mappings, [unrelated, previousCaps])
+    }
+  }
+
   private let unrelated: KeyMapping = [
     MappingPolicy.sourceKey: 0x7_0000_0004, MappingPolicy.destinationKey: 0x7_0000_0005,
   ]

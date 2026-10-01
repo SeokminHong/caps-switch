@@ -10,8 +10,12 @@ public enum MappingPolicy {
   public static let f18Usage: UInt64 = 0x7_0000_006D
   public static let capsToF18: KeyMapping = [sourceKey: capsLockUsage, destinationKey: f18Usage]
 
-  public static func applying(to mappings: [KeyMapping]) -> [KeyMapping] {
-    mappings.filter { $0[sourceKey] != capsLockUsage } + [capsToF18]
+  public static func mapping(to key: FunctionKey) -> KeyMapping {
+    [sourceKey: capsLockUsage, destinationKey: key.hidUsage]
+  }
+
+  public static func applying(to mappings: [KeyMapping], key: FunctionKey = .f18) -> [KeyMapping] {
+    mappings.filter { $0[sourceKey] != capsLockUsage } + [mapping(to: key)]
   }
 
   public static func restoring(current: [KeyMapping], original: [KeyMapping]) -> [KeyMapping] {
@@ -80,10 +84,13 @@ public struct SystemKeyboardBackend: KeyboardBackend {
 public final class MappingSession {
   private let backend: any KeyboardBackend
   private var originals: [UInt64: [KeyMapping]] = [:]
+  public let targetKey: FunctionKey
   public var isActive: Bool { !originals.isEmpty }
 
-  public init(backend: any KeyboardBackend = SystemKeyboardBackend()) {
+  public init(backend: any KeyboardBackend = SystemKeyboardBackend(), targetKey: FunctionKey = .f18)
+  {
     self.backend = backend
+    self.targetKey = targetKey
   }
 
   public func apply() throws {
@@ -91,7 +98,8 @@ public final class MappingSession {
     guard !keyboards.isEmpty else { throw KeyboardError.failure("연결된 키보드를 찾지 못했습니다.") }
     for keyboard in keyboards {
       if originals[keyboard.id] == nil { originals[keyboard.id] = keyboard.mappings }
-      try backend.write(id: keyboard.id, mappings: MappingPolicy.applying(to: keyboard.mappings))
+      try backend.write(
+        id: keyboard.id, mappings: MappingPolicy.applying(to: keyboard.mappings, key: targetKey))
     }
   }
 
@@ -102,7 +110,8 @@ public final class MappingSession {
       let capsMappings = keyboard.mappings.filter {
         $0[MappingPolicy.sourceKey] == MappingPolicy.capsLockUsage
       }
-      guard capsMappings == [MappingPolicy.capsToF18] || keyboard.mappings == original else {
+      guard capsMappings == [MappingPolicy.mapping(to: targetKey)] || keyboard.mappings == original
+      else {
         throw KeyboardError.failure("다른 앱이 Caps Lock 매핑을 변경했습니다. 해당 매핑은 유지합니다.")
       }
       try backend.write(

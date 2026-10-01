@@ -27,7 +27,7 @@ public final class CapsHotkey {
 
   public init(onPress: @escaping () -> Void) { self.onPress = onPress }
 
-  public func start() throws {
+  public func start(key: FunctionKey = .f18) throws {
     guard hotkey == nil else { return }
     var eventType = EventTypeSpec(
       eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)
@@ -53,13 +53,13 @@ public final class CapsHotkey {
       throw KeyboardError.failure("단축키 처리기를 등록하지 못했습니다. 코드: \(handlerStatus)")
     }
     let status = RegisterEventHotKey(
-      UInt32(kVK_F18), UInt32(shiftKey),
+      key.keyCode, UInt32(shiftKey),
       EventHotKeyID(signature: Self.signature, id: Self.hotkeyId),
       GetApplicationEventTarget(), OptionBits(kEventHotKeyExclusive), &hotkey
     )
     guard status == noErr else {
       stop()
-      throw KeyboardError.failure("Shift+F18을 등록하지 못했습니다. 코드: \(status)")
+      throw KeyboardError.failure("Shift+\(key.name)을 등록하지 못했습니다. 코드: \(status)")
     }
   }
 
