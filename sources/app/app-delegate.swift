@@ -75,7 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     stack.alignment = .leading
     stack.spacing = 16
     stack.translatesAutoresizingMaskIntoConstraints = false
-    let title = NSTextField(labelWithString: "Caps Lock으로 한영 전환")
+    let title = NSTextField(labelWithString: "Caps Lock으로 입력 소스 전환")
     title.font = .systemFont(ofSize: 22, weight: .semibold)
     let description = NSTextField(
       wrappingLabelWithString:
@@ -203,8 +203,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     loginButton.state = SMAppService.mainApp.status == .enabled ? .on : .off
     guide.stringValue =
       "1. 위 버튼으로 Caps Lock 전환 사용을 시작하세요.\n\n"
-      + "2. 시스템 설정 → 키보드 → 텍스트 입력 → 편집에서 ‘Caps Lock으로 입력 소스 전환’을 비활성화하세요.\n\n"
-      + "3. 키보드 → 키보드 단축키 → 입력 소스에서 ‘이전 입력 소스 선택’을 활성화하고 단축키를 편집한 뒤 Caps Lock을 누르세요. \(keyName)으로 표시되는지 확인하세요."
+      + "2. 시스템 설정 → 키보드 → 텍스트 입력 → 편집… → 모든 입력 소스에서 ‘Caps Lock 키로 ABC 입력 소스 전환’을 비활성화하세요.\n\n"
+      + "3. 키보드 → 키보드 단축키… → 입력 소스에서 ‘이전 입력 소스 선택’을 활성화하세요. 키 조합을 두 번 클릭한 다음 Caps Lock을 누르고 \(keyName)으로 표시되는지 확인하세요. ‘완료’를 클릭하세요."
     let configured = InputShortcut.isConfigured(for: session.targetKey)
     shortcutLabel.stringValue =
       configured
