@@ -1,3 +1,4 @@
+import CapsSwitchCore
 import Carbon
 import Foundation
 
@@ -9,7 +10,7 @@ enum InputShortcut {
   private static let modifiersParameter = 2
   private static let parameterCount = 3
 
-  static var isF18Configured: Bool {
+  static func isConfigured(for key: FunctionKey) -> Bool {
     CFPreferencesAppSynchronize(preferencesDomain as CFString)
     guard
       let shortcuts = CFPreferencesCopyAppValue(
@@ -21,7 +22,7 @@ enum InputShortcut {
       let parameters = value["parameters"] as? [NSNumber],
       parameters.count == parameterCount
     else { return false }
-    return parameters[keyCodeParameter].intValue == kVK_F18
+    return parameters[keyCodeParameter].uint32Value == key.keyCode
       && parameters[modifiersParameter].intValue == 0
   }
 }
