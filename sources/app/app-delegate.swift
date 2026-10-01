@@ -52,7 +52,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       do { try enableMapping() } catch { showError(error) }
     }
     refreshStatus()
-    if !AppSettings.mappingEnabled { showWindow() }
+    showWindow()
+  }
+
+  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool
+  {
+    showWindow()
+    return true
   }
 
   func applicationDidBecomeActive(_ notification: Notification) { refreshStatus() }
