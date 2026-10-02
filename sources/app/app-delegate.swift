@@ -54,14 +54,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     configureMenu()
-    configureWindow()
     configureMappingRecovery()
     configureTerminationSignals()
     if AppSettings.mappingEnabled {
       do { try enableMapping() } catch { showError(error) }
     }
     refreshStatus()
-    showWindow()
   }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool
@@ -72,7 +70,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
   func applicationDidBecomeActive(_ notification: Notification) { refreshStatus() }
 
-  func windowWillClose(_ notification: Notification) { window = nil }
+  func applicationDidResignActive(_ notification: Notification) { window?.close() }
+
+  func windowWillClose(_ notification: Notification) {
+    if let scroll = window?.contentView?.subviews.first as? NSScrollView,
+      let stack = scroll.documentView as? NSStackView
+    {
+      for case let imageView as NSImageView in stack.arrangedSubviews {
+        imageView.image = nil
+      }
+      scroll.documentView = nil
+    }
+    window?.contentView = nil
+    window = nil
+  }
 
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     do {
