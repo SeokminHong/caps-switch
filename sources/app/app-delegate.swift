@@ -6,7 +6,7 @@ private final class GuideStackView: NSStackView {
   override var isFlipped: Bool { true }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
   func checkGuideLayout() throws {
     configureWindow()
     refreshStatus()
@@ -37,8 +37,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
   private var statusItem: NSStatusItem!
   private var window: NSWindow!
-  private static let mappingCheckInterval: TimeInterval = 2
-  private var mappingTimer: Timer?
+  private static let recoveryDelays: [TimeInterval] = [0.2, 1, 3]
+  private var recoveryTasks: [DispatchWorkItem] = []
+  private lazy var keyboardObserver = KeyboardServiceObserver { [weak self] in
+    self?.scheduleMappingRecovery()
+  }
   private let statusLabel = NSTextField(wrappingLabelWithString: "사용 중지")
   private let shortcutLabel = NSTextField(wrappingLabelWithString: "")
   private let toggleButton = NSButton(title: "Caps Lock 전환 사용 시작", target: nil, action: nil)
@@ -66,12 +69,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationDidBecomeActive(_ notification: Notification) { refreshStatus() }
 
+  func windowWillClose(_ notification: Notification) { window = nil }
+
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     do {
       try session.restore()
       hotkey.stop()
-      mappingTimer?.invalidate()
+      cancelMappingRecovery()
+      keyboardObserver.stop()
       NSWorkspace.shared.notificationCenter.removeObserver(self)
+      DistributedNotificationCenter.default().removeObserver(self)
       return .terminateNow
     } catch {
       showError(error)
@@ -85,14 +92,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification,
       NSWorkspace.sessionDidBecomeActiveNotification,
     ] {
-      center.addObserver(self, selector: #selector(recoverMapping), name: name, object: nil)
+      center.addObserver(
+        self, selector: #selector(scheduleMappingRecovery), name: name, object: nil)
     }
-    let timer = Timer(timeInterval: Self.mappingCheckInterval, repeats: true) { [weak self] _ in
-      self?.recoverMapping()
+    DistributedNotificationCenter.default().addObserver(
+      self, selector: #selector(scheduleMappingRecovery),
+      name: Notification.Name("com.apple.screenIsUnlocked"), object: nil
+    )
+    do { try keyboardObserver.start() } catch { showError(error) }
+  }
+
+  private func cancelMappingRecovery() {
+    for task in recoveryTasks { task.cancel() }
+    recoveryTasks.removeAll()
+  }
+
+  @objc private func scheduleMappingRecovery() {
+    guard session.isActive else { return }
+    cancelMappingRecovery()
+    for delay in Self.recoveryDelays {
+      let task = DispatchWorkItem { [weak self] in self?.recoverMapping() }
+      recoveryTasks.append(task)
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: task)
     }
-    timer.tolerance = Self.mappingCheckInterval / 4
-    RunLoop.main.add(timer, forMode: .common)
-    mappingTimer = timer
   }
 
   @objc private func recoverMapping() {
@@ -130,6 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false
     )
     window.title = "Caps Switch"
+    window.delegate = self
     window.isReleasedWhenClosed = false
     window.minSize = NSSize(width: 600, height: 500)
     window.center()
@@ -150,6 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     toggleButton.bezelStyle = .rounded
     let heading = NSTextField(labelWithString: "macOS 언어 전환 설정")
     heading.font = .systemFont(ofSize: 15, weight: .semibold)
+    keySelector.removeAllItems()
     keySelector.addItems(withTitles: FunctionKey.allCases.map(\.name))
     keySelector.selectItem(withTitle: session.targetKey.name)
     keySelector.target = self
@@ -226,6 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   @objc private func showWindow() {
+    if window == nil { configureWindow() }
     refreshStatus()
     window.makeKeyAndOrderFront(nil)
     NSApp.activate(ignoringOtherApps: true)
@@ -234,6 +259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   @objc private func toggleMapping() {
     do {
       if session.isActive {
+        cancelMappingRecovery()
         try session.restore()
         hotkey.stop()
         AppSettings.mappingEnabled = false
@@ -260,6 +286,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       let key = FunctionKey.allCases.first(where: { $0.name == selected })
     else { return }
     do {
+      cancelMappingRecovery()
       try session.restore()
       hotkey.stop()
       AppSettings.mappingEnabled = false

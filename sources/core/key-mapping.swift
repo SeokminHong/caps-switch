@@ -51,11 +51,12 @@ public protocol KeyboardBackend {
   func write(id: UInt64, mappings: [KeyMapping]) throws
 }
 
-public struct SystemKeyboardBackend: KeyboardBackend {
+public final class SystemKeyboardBackend: KeyboardBackend {
+  private let client = CKCreateKeyboardClient()
   public init() {}
 
   public func read() throws -> [KeyboardState] {
-    guard let array = CKCopyKeyboards() else {
+    guard let client, let array = CKCopyKeyboardsWithClient(client) else {
       throw KeyboardError.failure("키보드 서비스를 조회하지 못했습니다.")
     }
     guard let records = array as? [[String: Any]] else {
@@ -75,7 +76,7 @@ public struct SystemKeyboardBackend: KeyboardBackend {
 
   public func write(id: UInt64, mappings: [KeyMapping]) throws {
     let array = mappings.map { $0.mapValues { NSNumber(value: $0) } } as NSArray
-    guard CKSetMapping(id, array as CFArray),
+    guard let client, CKSetMappingWithClient(client, id, array as CFArray),
       try read().first(where: { $0.id == id })?.mappings == mappings
     else { throw KeyboardError.failure("키보드 \(id)의 매핑을 적용하지 못했습니다.") }
   }

@@ -12,8 +12,19 @@ static CFStringRef const mappingProperty = CFSTR("UserKeyMapping");
 CFArrayRef CKCopyKeyboards(void) {
     IOHIDEventSystemClientRef client = IOHIDEventSystemClientCreateSimpleClient(kCFAllocatorDefault);
     if (!client) return NULL;
+    CFArrayRef keyboards = CKCopyKeyboardsWithClient(client);
+    CFRelease(client);
+    return keyboards;
+}
+
+CFTypeRef CKCreateKeyboardClient(void) {
+    return IOHIDEventSystemClientCreateSimpleClient(kCFAllocatorDefault);
+}
+
+CFArrayRef CKCopyKeyboardsWithClient(CFTypeRef rawClient) {
+    IOHIDEventSystemClientRef client = (IOHIDEventSystemClientRef)rawClient;
     CFArrayRef services = IOHIDEventSystemClientCopyServices(client);
-    if (!services) { CFRelease(client); return NULL; }
+    if (!services) return NULL;
     NSMutableArray *keyboards = [NSMutableArray array];
     for (CFIndex index = 0; index < CFArrayGetCount(services); index++) {
         IOHIDServiceClientRef service = (IOHIDServiceClientRef)CFArrayGetValueAtIndex(services, index);
@@ -27,15 +38,21 @@ CFArrayRef CKCopyKeyboards(void) {
         }];
     }
     CFRelease(services);
-    CFRelease(client);
     return CFBridgingRetain(keyboards);
 }
 
 bool CKSetMapping(uint64_t registryId, CFArrayRef mapping) {
     IOHIDEventSystemClientRef client = IOHIDEventSystemClientCreateSimpleClient(kCFAllocatorDefault);
     if (!client) return false;
+    bool result = CKSetMappingWithClient(client, registryId, mapping);
+    CFRelease(client);
+    return result;
+}
+
+bool CKSetMappingWithClient(CFTypeRef rawClient, uint64_t registryId, CFArrayRef mapping) {
+    IOHIDEventSystemClientRef client = (IOHIDEventSystemClientRef)rawClient;
     CFArrayRef services = IOHIDEventSystemClientCopyServices(client);
-    if (!services) { CFRelease(client); return false; }
+    if (!services) return false;
     bool result = false;
     for (CFIndex index = 0; index < CFArrayGetCount(services); index++) {
         IOHIDServiceClientRef service = (IOHIDServiceClientRef)CFArrayGetValueAtIndex(services, index);
@@ -45,7 +62,6 @@ bool CKSetMapping(uint64_t registryId, CFArrayRef mapping) {
         break;
     }
     CFRelease(services);
-    CFRelease(client);
     return result;
 }
 
