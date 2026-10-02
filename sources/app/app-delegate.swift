@@ -37,6 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
   private var statusItem: NSStatusItem!
   private var window: NSWindow!
+  private static let mappingCheckInterval: TimeInterval = 2
+  private var mappingTimer: Timer?
   private let statusLabel = NSTextField(wrappingLabelWithString: "사용 중지")
   private let shortcutLabel = NSTextField(wrappingLabelWithString: "")
   private let toggleButton = NSButton(title: "Caps Lock 전환 사용 시작", target: nil, action: nil)
@@ -48,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     configureMenu()
     configureWindow()
+    configureMappingRecovery()
     if AppSettings.mappingEnabled {
       do { try enableMapping() } catch { showError(error) }
     }
@@ -67,10 +70,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     do {
       try session.restore()
       hotkey.stop()
+      mappingTimer?.invalidate()
+      NSWorkspace.shared.notificationCenter.removeObserver(self)
       return .terminateNow
     } catch {
       showError(error)
       return .terminateCancel
+    }
+  }
+
+  private func configureMappingRecovery() {
+    let center = NSWorkspace.shared.notificationCenter
+    for name in [
+      NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification,
+      NSWorkspace.sessionDidBecomeActiveNotification,
+    ] {
+      center.addObserver(self, selector: #selector(recoverMapping), name: name, object: nil)
+    }
+    let timer = Timer(timeInterval: Self.mappingCheckInterval, repeats: true) { [weak self] _ in
+      self?.recoverMapping()
+    }
+    timer.tolerance = Self.mappingCheckInterval / 4
+    RunLoop.main.add(timer, forMode: .common)
+    mappingTimer = timer
+  }
+
+  @objc private func recoverMapping() {
+    guard session.isActive else { return }
+    do { try session.reconcile() } catch {
+      NSLog("Caps Switch mapping recovery: %@", error.localizedDescription)
     }
   }
 

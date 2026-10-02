@@ -110,7 +110,9 @@ public final class MappingSession {
       let capsMappings = keyboard.mappings.filter {
         $0[MappingPolicy.sourceKey] == MappingPolicy.capsLockUsage
       }
-      guard capsMappings == [MappingPolicy.mapping(to: targetKey)] || keyboard.mappings == original
+      guard
+        capsMappings.isEmpty || capsMappings == [MappingPolicy.mapping(to: targetKey)]
+          || keyboard.mappings == original
       else {
         throw KeyboardError.failure("다른 앱이 Caps Lock 매핑을 변경했습니다. 해당 매핑은 유지합니다.")
       }
@@ -122,5 +124,25 @@ public final class MappingSession {
     }
     let connectedIds = Set(keyboards.map(\.id))
     originals = originals.filter { connectedIds.contains($0.key) }
+  }
+
+  public func reconcile() throws {
+    guard isActive else { return }
+    for keyboard in try backend.read() {
+      let capsMappings = keyboard.mappings.filter {
+        $0[MappingPolicy.sourceKey] == MappingPolicy.capsLockUsage
+      }
+      if capsMappings == [MappingPolicy.mapping(to: targetKey)] { continue }
+      if let original = originals[keyboard.id] {
+        let originalCaps = original.filter {
+          $0[MappingPolicy.sourceKey] == MappingPolicy.capsLockUsage
+        }
+        guard capsMappings.isEmpty || capsMappings == originalCaps else { continue }
+      } else {
+        originals[keyboard.id] = keyboard.mappings
+      }
+      try backend.write(
+        id: keyboard.id, mappings: MappingPolicy.applying(to: keyboard.mappings, key: targetKey))
+    }
   }
 }
