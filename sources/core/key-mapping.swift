@@ -100,15 +100,20 @@ public final class MappingSession {
       throw KeyboardError.failure("이전 매핑을 먼저 복원해 주세요.")
     }
     let keyboards = try backend.read()
-    guard !keyboards.isEmpty else { throw KeyboardError.failure("연결된 키보드를 찾지 못했습니다.") }
     isActive = true
+    var failures: [String] = []
     for keyboard in keyboards {
       if originals[keyboard.id] == nil {
         originals[keyboard.id] = capsMappings(in: keyboard.mappings)
       }
-      try backend.write(
-        id: keyboard.id, mappings: MappingPolicy.applying(to: keyboard.mappings, key: targetKey))
+      do {
+        try backend.write(
+          id: keyboard.id, mappings: MappingPolicy.applying(to: keyboard.mappings, key: targetKey))
+      } catch {
+        failures.append("\(keyboard.product): \(error.localizedDescription)")
+      }
     }
+    if !failures.isEmpty { throw KeyboardError.failure(failures.joined(separator: "\n")) }
   }
 
   public func restore() throws {
@@ -147,6 +152,7 @@ public final class MappingSession {
     guard !keyboards.isEmpty else { return }
     let connectedIds = Set(keyboards.map(\.id))
     originals = originals.filter { connectedIds.contains($0.key) }
+    var failures: [String] = []
     for keyboard in keyboards {
       let capsMappings = capsMappings(in: keyboard.mappings)
       if let original = originals[keyboard.id] {
@@ -155,9 +161,14 @@ public final class MappingSession {
         originals[keyboard.id] = capsMappings
       }
       if capsMappings == [MappingPolicy.mapping(to: targetKey)] { continue }
-      try backend.write(
-        id: keyboard.id, mappings: MappingPolicy.applying(to: keyboard.mappings, key: targetKey))
+      do {
+        try backend.write(
+          id: keyboard.id, mappings: MappingPolicy.applying(to: keyboard.mappings, key: targetKey))
+      } catch {
+        failures.append("\(keyboard.product): \(error.localizedDescription)")
+      }
     }
+    if !failures.isEmpty { throw KeyboardError.failure(failures.joined(separator: "\n")) }
   }
 
   private func capsMappings(in mappings: [KeyMapping]) -> [KeyMapping] {

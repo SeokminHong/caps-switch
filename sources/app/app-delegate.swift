@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
   private var window: NSWindow!
   private static let recoveryDelays: [TimeInterval] = [0.2, 1, 3]
   private var recoveryTasks: [DispatchWorkItem] = []
+  private var mappingError: String?
   private var terminationSignals: [DispatchSourceSignal] = []
   private lazy var keyboardObserver = KeyboardServiceObserver { [weak self] in
     self?.scheduleMappingRecovery()
@@ -144,9 +145,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
   @objc private func recoverMapping() {
     guard session.isActive else { return }
-    do { try session.reconcile() } catch {
+    do {
+      try session.reconcile()
+      mappingError = nil
+    } catch {
+      mappingError = error.localizedDescription
       NSLog("Caps Switch mapping recovery: %@", error.localizedDescription)
     }
+    refreshStatus()
   }
 
   private func configureMenu() {
@@ -299,6 +305,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
   private func enableMapping() throws {
     try hotkey.start(key: session.targetKey)
     do { try session.apply() } catch {
+      if session.isActive {
+        mappingError = error.localizedDescription
+        NSLog("Caps Switch mapping pending: %@", error.localizedDescription)
+        scheduleMappingRecovery()
+        return
+      }
       let applyError = error
       hotkey.stop()
       do { try session.restore() } catch {
@@ -307,6 +319,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
       }
       throw applyError
     }
+    mappingError = nil
+    scheduleMappingRecovery()
   }
 
   @objc private func changeTargetKey() {
@@ -341,7 +355,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
   @objc private func reapplyMapping() {
     guard session.isActive else { return }
-    do { try session.apply() } catch { showError(error) }
+    do {
+      try session.apply()
+      mappingError = nil
+    } catch {
+      mappingError = error.localizedDescription
+      NSLog("Caps Switch mapping pending: %@", error.localizedDescription)
+    }
+    scheduleMappingRecovery()
     refreshStatus()
   }
 
@@ -357,6 +378,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
   private func refreshStatus() {
     let active = session.isActive
     statusLabel.stringValue = active ? "Caps Lock 전환 사용 중" : "Caps Lock 전환 사용 중지"
+    if active, let mappingError {
+      statusLabel.stringValue = "일부 키보드 적용 대기 · 연결 후 다시 시도합니다.\n\(mappingError)"
+    }
     if !active && session.hasPendingRestoration {
       statusLabel.stringValue = "매핑 복원 실패 · 사용 중지 버튼으로 다시 시도해 주세요."
     }

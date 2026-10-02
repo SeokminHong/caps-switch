@@ -55,10 +55,65 @@ final class KeyMappingTests: XCTestCase {
     XCTAssertFalse(session.hasPendingRestoration)
   }
 
-  func testNoKeyboardReportsFailure() {
+  func testStartWithoutKeyboardAppliesAfterConnection() throws {
     let backend = MemoryBackend(mappings: [])
     backend.keyboards = []
-    XCTAssertThrowsError(try MappingSession(backend: backend).apply())
+    let session = MappingSession(backend: backend)
+    try session.apply()
+    XCTAssertTrue(session.isActive)
+    backend.keyboards = [KeyboardState(id: 2, product: "Connected", mappings: [])]
+    try session.reconcile()
+    XCTAssertEqual(backend.keyboards[0].mappings, [MappingPolicy.capsToF18])
+    try session.restore()
+    XCTAssertEqual(backend.keyboards[0].mappings, [])
+  }
+
+  func testApplyFailureKeepsOtherKeyboardsActiveAndRetries() throws {
+    let backend = MemoryBackend(mappings: [previousCaps])
+    backend.keyboards.append(KeyboardState(id: 2, product: "Ready", mappings: []))
+    backend.failedIds = [1]
+    let session = MappingSession(backend: backend)
+    XCTAssertThrowsError(try session.apply())
+    XCTAssertTrue(session.isActive)
+    XCTAssertEqual(backend.keyboards[1].mappings, [MappingPolicy.capsToF18])
+    backend.failedIds = []
+    try session.reconcile()
+    XCTAssertEqual(backend.keyboards[0].mappings, [MappingPolicy.capsToF18])
+    try session.restore()
+    XCTAssertEqual(backend.keyboards[0].mappings, [previousCaps])
+    XCTAssertEqual(backend.keyboards[1].mappings, [])
+  }
+
+  func testReconnectFailureDoesNotBlockOtherKeyboardsOrReplacement() throws {
+    let backend = MemoryBackend(mappings: [])
+    let session = MappingSession(backend: backend)
+    try session.apply()
+    backend.keyboards = [
+      KeyboardState(id: 2, product: "Not ready", mappings: []),
+      KeyboardState(id: 3, product: "Ready", mappings: [previousCaps]),
+    ]
+    backend.failedIds = [2]
+    XCTAssertThrowsError(try session.reconcile())
+    XCTAssertEqual(backend.keyboards[1].mappings, [MappingPolicy.capsToF18])
+    XCTAssertTrue(session.isActive)
+    backend.keyboards[0] = KeyboardState(id: 4, product: "Reconnected", mappings: [])
+    try session.reconcile()
+    XCTAssertEqual(backend.keyboards[0].mappings, [MappingPolicy.capsToF18])
+    try session.restore()
+    XCTAssertEqual(backend.keyboards[0].mappings, [])
+    XCTAssertEqual(backend.keyboards[1].mappings, [previousCaps])
+  }
+
+  func testStopAfterFailedApplyDoesNotResumeOnReconnect() throws {
+    let backend = MemoryBackend(mappings: [])
+    backend.failedIds = [1]
+    let session = MappingSession(backend: backend)
+    XCTAssertThrowsError(try session.apply())
+    try session.restore()
+    backend.keyboards = [KeyboardState(id: 2, product: "Reconnected", mappings: [])]
+    try session.reconcile()
+    XCTAssertFalse(session.isActive)
+    XCTAssertEqual(backend.keyboards[0].mappings, [])
   }
 
   func testReconcileRecoversResetMappingForEveryFunctionKey() throws {
