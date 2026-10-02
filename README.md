@@ -32,7 +32,9 @@ open '/Users/seokmin/Documents/personal/caps-switch/build/Caps Switch.app'
 
 화면 잠금 해제 시에는 `com.apple.screenIsUnlocked` 알림도 참조한다. Apple이 공개 명세로 보장하는 알림은 아니므로 macOS 버전에 따라 이 알림을 받지 못할 수 있다. 절전·화면 복귀와 사용자 세션 복귀, 키보드 서비스 연결 알림은 별도로 처리한다.
 
-Shift+Caps Lock 토글은 앱이 실행 중일 때 동작한다. 강제 종료하면 macOS에 적용한 키 매핑은 남을 수 있으며 재부팅하면 사라진다. macOS에서 등록한 언어 전환 단축키는 앱 종료 후에도 유지한다.
+Shift+Caps Lock 토글은 앱이 실행 중일 때 동작한다. 정상 종료와 SIGTERM·SIGINT 종료 요청에는 매핑을 복원한다. 키보드 하나의 복원이 실패해도 나머지 키보드는 계속 복원하고 실패한 키보드의 원래 값을 보존한다. 복원 실패 시 종료를 취소하므로 사용 중지 버튼이나 종료 메뉴로 다시 시도할 수 있다. 다른 앱이 변경한 Caps Lock 매핑은 유지한다.
+
+SIGKILL 강제 종료나 프로세스 충돌에는 종료 코드를 실행할 수 없으므로 키 매핑이 남을 수 있으며 재부팅하면 사라진다. 별도의 복원용 상주 프로세스는 실행하지 않는다. macOS에서 등록한 언어 전환 단축키는 앱 종료 후에도 유지한다.
 
 ‘로그인 시 자동 실행’을 선택하면 `SMAppService.mainApp`으로 로그인 항목을 등록한다. macOS가 승인을 요구하면 로그인 항목 설정 화면을 연다. 선택을 해제하면 등록을 취소한다. 앱 종료는 자동 실행 등록을 취소하지 않는다. [Apple 로그인 항목 API](https://developer.apple.com/documentation/servicemanagement/smappservice/mainapp)
 

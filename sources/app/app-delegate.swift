@@ -1,5 +1,6 @@
 import AppKit
 import CapsSwitchCore
+import Darwin
 import ServiceManagement
 
 private final class GuideStackView: NSStackView {
@@ -39,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
   private var window: NSWindow!
   private static let recoveryDelays: [TimeInterval] = [0.2, 1, 3]
   private var recoveryTasks: [DispatchWorkItem] = []
+  private var terminationSignals: [DispatchSourceSignal] = []
   private lazy var keyboardObserver = KeyboardServiceObserver { [weak self] in
     self?.scheduleMappingRecovery()
   }
@@ -54,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     configureMenu()
     configureWindow()
     configureMappingRecovery()
+    configureTerminationSignals()
     if AppSettings.mappingEnabled {
       do { try enableMapping() } catch { showError(error) }
     }
@@ -73,16 +76,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     do {
-      try session.restore()
-      hotkey.stop()
       cancelMappingRecovery()
+      hotkey.stop()
+      try session.restore()
       keyboardObserver.stop()
       NSWorkspace.shared.notificationCenter.removeObserver(self)
       DistributedNotificationCenter.default().removeObserver(self)
       return .terminateNow
     } catch {
       showError(error)
+      refreshStatus()
       return .terminateCancel
+    }
+  }
+
+  private func configureTerminationSignals() {
+    for number in [SIGTERM, SIGINT] {
+      let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
+      source.setEventHandler { NSApp.terminate(nil) }
+      signal(number, SIG_IGN)
+      source.resume()
+      terminationSignals.append(source)
     }
   }
 
@@ -258,11 +272,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
   @objc private func toggleMapping() {
     do {
-      if session.isActive {
+      if session.isActive || session.hasPendingRestoration {
         cancelMappingRecovery()
-        try session.restore()
         hotkey.stop()
         AppSettings.mappingEnabled = false
+        try session.restore()
       } else {
         try enableMapping()
         AppSettings.mappingEnabled = true
@@ -275,8 +289,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     try hotkey.start(key: session.targetKey)
     do { try session.apply() } catch {
       let applyError = error
-      try session.restore()
       hotkey.stop()
+      do { try session.restore() } catch {
+        throw KeyboardError.failure(
+          "\(applyError.localizedDescription)\n복원 실패: \(error.localizedDescription)")
+      }
       throw applyError
     }
   }
@@ -287,9 +304,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     else { return }
     do {
       cancelMappingRecovery()
-      try session.restore()
       hotkey.stop()
       AppSettings.mappingEnabled = false
+      try session.restore()
       AppSettings.targetKey = key
       session = MappingSession(targetKey: key)
     } catch { showError(error) }
@@ -329,8 +346,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
   private func refreshStatus() {
     let active = session.isActive
     statusLabel.stringValue = active ? "Caps Lock 전환 사용 중" : "Caps Lock 전환 사용 중지"
-    toggleButton.title = active ? "사용 중지하고 원래 매핑 복원" : "Caps Lock 전환 사용 시작"
-    toggleMenuItem?.title = active ? "사용 중지" : "사용 시작"
+    if !active && session.hasPendingRestoration {
+      statusLabel.stringValue = "매핑 복원 실패 · 사용 중지 버튼으로 다시 시도해 주세요."
+    }
+    let needsRestore = active || session.hasPendingRestoration
+    toggleButton.title = needsRestore ? "사용 중지하고 원래 매핑 복원" : "Caps Lock 전환 사용 시작"
+    toggleMenuItem?.title = needsRestore ? "사용 중지" : "사용 시작"
     statusItem?.button?.title = active ? "⇪·" : "⇪"
     let keyName = session.targetKey.name
     loginButton.state = SMAppService.mainApp.status == .enabled ? .on : .off

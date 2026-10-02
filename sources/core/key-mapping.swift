@@ -86,7 +86,8 @@ public final class MappingSession {
   private let backend: any KeyboardBackend
   private var originals: [UInt64: [KeyMapping]] = [:]
   public let targetKey: FunctionKey
-  public var isActive: Bool { !originals.isEmpty }
+  public private(set) var isActive = false
+  public var hasPendingRestoration: Bool { !originals.isEmpty }
 
   public init(backend: any KeyboardBackend = SystemKeyboardBackend(), targetKey: FunctionKey = .f18)
   {
@@ -95,55 +96,71 @@ public final class MappingSession {
   }
 
   public func apply() throws {
+    guard isActive || !hasPendingRestoration else {
+      throw KeyboardError.failure("이전 매핑을 먼저 복원해 주세요.")
+    }
     let keyboards = try backend.read()
     guard !keyboards.isEmpty else { throw KeyboardError.failure("연결된 키보드를 찾지 못했습니다.") }
+    isActive = true
     for keyboard in keyboards {
-      if originals[keyboard.id] == nil { originals[keyboard.id] = keyboard.mappings }
+      if originals[keyboard.id] == nil {
+        originals[keyboard.id] = capsMappings(in: keyboard.mappings)
+      }
       try backend.write(
         id: keyboard.id, mappings: MappingPolicy.applying(to: keyboard.mappings, key: targetKey))
     }
   }
 
   public func restore() throws {
+    isActive = false
+    guard hasPendingRestoration else { return }
     let keyboards = try backend.read()
+    var failures: [String] = []
     for keyboard in keyboards {
       guard let original = originals[keyboard.id] else { continue }
-      let capsMappings = keyboard.mappings.filter {
-        $0[MappingPolicy.sourceKey] == MappingPolicy.capsLockUsage
-      }
+      let capsMappings = capsMappings(in: keyboard.mappings)
       guard
         capsMappings.isEmpty || capsMappings == [MappingPolicy.mapping(to: targetKey)]
-          || keyboard.mappings == original
+          || capsMappings == original
       else {
-        throw KeyboardError.failure("다른 앱이 Caps Lock 매핑을 변경했습니다. 해당 매핑은 유지합니다.")
+        originals.removeValue(forKey: keyboard.id)
+        continue
       }
-      try backend.write(
-        id: keyboard.id,
-        mappings: MappingPolicy.restoring(current: keyboard.mappings, original: original)
-      )
-      originals.removeValue(forKey: keyboard.id)
+      do {
+        let restored = MappingPolicy.restoring(current: keyboard.mappings, original: original)
+        if restored != keyboard.mappings {
+          try backend.write(id: keyboard.id, mappings: restored)
+        }
+        originals.removeValue(forKey: keyboard.id)
+      } catch {
+        failures.append("\(keyboard.product): \(error.localizedDescription)")
+      }
     }
     let connectedIds = Set(keyboards.map(\.id))
     originals = originals.filter { connectedIds.contains($0.key) }
+    if !failures.isEmpty { throw KeyboardError.failure(failures.joined(separator: "\n")) }
   }
 
   public func reconcile() throws {
     guard isActive else { return }
-    for keyboard in try backend.read() {
-      let capsMappings = keyboard.mappings.filter {
-        $0[MappingPolicy.sourceKey] == MappingPolicy.capsLockUsage
+    let keyboards = try backend.read()
+    guard !keyboards.isEmpty else { return }
+    let connectedIds = Set(keyboards.map(\.id))
+    originals = originals.filter { connectedIds.contains($0.key) }
+    for keyboard in keyboards {
+      let capsMappings = capsMappings(in: keyboard.mappings)
+      if let original = originals[keyboard.id] {
+        guard capsMappings.isEmpty || capsMappings == original else { continue }
+      } else {
+        originals[keyboard.id] = capsMappings
       }
       if capsMappings == [MappingPolicy.mapping(to: targetKey)] { continue }
-      if let original = originals[keyboard.id] {
-        let originalCaps = original.filter {
-          $0[MappingPolicy.sourceKey] == MappingPolicy.capsLockUsage
-        }
-        guard capsMappings.isEmpty || capsMappings == originalCaps else { continue }
-      } else {
-        originals[keyboard.id] = keyboard.mappings
-      }
       try backend.write(
         id: keyboard.id, mappings: MappingPolicy.applying(to: keyboard.mappings, key: targetKey))
     }
+  }
+
+  private func capsMappings(in mappings: [KeyMapping]) -> [KeyMapping] {
+    mappings.filter { $0[MappingPolicy.sourceKey] == MappingPolicy.capsLockUsage }
   }
 }

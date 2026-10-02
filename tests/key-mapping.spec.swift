@@ -50,8 +50,9 @@ final class KeyMappingTests: XCTestCase {
     let session = MappingSession(backend: backend)
     try session.apply()
     try backend.write(id: 1, mappings: [previousCaps])
-    XCTAssertThrowsError(try session.restore())
+    try session.restore()
     XCTAssertEqual(backend.keyboards[0].mappings, [previousCaps])
+    XCTAssertFalse(session.hasPendingRestoration)
   }
 
   func testNoKeyboardReportsFailure() {
@@ -132,19 +133,101 @@ final class KeyMappingTests: XCTestCase {
     XCTAssertEqual(backend.keyboards[0].mappings, [unrelated, previousCaps])
     XCTAssertFalse(session.isActive)
   }
+
+  func testRestoreContinuesAfterFailureAndRetriesOnlyFailedKeyboard() throws {
+    let backend = MemoryBackend(mappings: [previousCaps])
+    backend.keyboards.append(KeyboardState(id: 2, product: "Second", mappings: []))
+    let session = MappingSession(backend: backend)
+    try session.apply()
+    backend.failedIds = [1]
+    XCTAssertThrowsError(try session.restore())
+    XCTAssertEqual(backend.keyboards[1].mappings, [])
+    XCTAssertFalse(session.isActive)
+    XCTAssertTrue(session.hasPendingRestoration)
+    let writes = backend.writeCount
+    try session.reconcile()
+    XCTAssertEqual(backend.writeCount, writes)
+    XCTAssertThrowsError(try session.apply())
+    backend.failedIds = []
+    try session.restore()
+    XCTAssertEqual(backend.writeCount, writes + 1)
+    XCTAssertEqual(backend.keyboards[0].mappings, [previousCaps])
+    XCTAssertFalse(session.hasPendingRestoration)
+  }
+
+  func testRestorePreservesExternalChangeAndRestoresOtherKeyboard() throws {
+    let backend = MemoryBackend(mappings: [])
+    backend.keyboards.append(KeyboardState(id: 2, product: "Second", mappings: []))
+    let session = MappingSession(backend: backend)
+    try session.apply()
+    try backend.write(id: 1, mappings: [previousCaps])
+    try session.restore()
+    XCTAssertEqual(backend.keyboards[0].mappings, [previousCaps])
+    XCTAssertEqual(backend.keyboards[1].mappings, [])
+    XCTAssertFalse(session.hasPendingRestoration)
+  }
+
+  func testRestoreReadFailureKeepsOriginalForRetry() throws {
+    let backend = MemoryBackend(mappings: [previousCaps])
+    let session = MappingSession(backend: backend)
+    try session.apply()
+    backend.readFails = true
+    XCTAssertThrowsError(try session.restore())
+    XCTAssertFalse(session.isActive)
+    XCTAssertTrue(session.hasPendingRestoration)
+    try session.reconcile()
+    backend.readFails = false
+    try session.restore()
+    XCTAssertEqual(backend.keyboards[0].mappings, [previousCaps])
+    XCTAssertFalse(session.hasPendingRestoration)
+  }
+
+  func testRepeatedReplacementKeepsRecoveryActiveWithoutKeyboards() throws {
+    let backend = MemoryBackend(mappings: [])
+    let session = MappingSession(backend: backend)
+    try session.apply()
+    for id in UInt64(2)...100 {
+      backend.keyboards = [KeyboardState(id: id, product: "Replacement", mappings: [])]
+      try session.reconcile()
+    }
+    backend.keyboards = []
+    try session.reconcile()
+    XCTAssertTrue(session.isActive)
+    XCTAssertTrue(session.hasPendingRestoration)
+    try session.restore()
+    XCTAssertFalse(session.isActive)
+  }
+
+  func testTemporaryMissingServicesKeepOriginalCapsMapping() throws {
+    let backend = MemoryBackend(mappings: [previousCaps])
+    let session = MappingSession(backend: backend)
+    try session.apply()
+    backend.keyboards = []
+    try session.reconcile()
+    backend.keyboards = [KeyboardState(id: 1, product: "Returned", mappings: [])]
+    try session.reconcile()
+    try session.restore()
+    XCTAssertEqual(backend.keyboards[0].mappings, [previousCaps])
+  }
 }
 
 private final class MemoryBackend: KeyboardBackend {
   var keyboards: [KeyboardState]
   private(set) var writeCount = 0
+  var failedIds: Set<UInt64> = []
+  var readFails = false
 
   init(mappings: [KeyMapping]) {
     keyboards = [KeyboardState(id: 1, product: "Test Keyboard", mappings: mappings)]
   }
 
-  func read() -> [KeyboardState] { keyboards }
+  func read() throws -> [KeyboardState] {
+    if readFails { throw KeyboardError.failure("Test read failure") }
+    return keyboards
+  }
 
   func write(id: UInt64, mappings: [KeyMapping]) throws {
+    if failedIds.contains(id) { throw KeyboardError.failure("Test write failure") }
     guard let index = keyboards.firstIndex(where: { $0.id == id }) else {
       throw KeyboardError.failure("Test keyboard missing")
     }
