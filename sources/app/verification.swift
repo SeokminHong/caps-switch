@@ -23,6 +23,25 @@ func runVerification() throws {
       })
     else { throw KeyboardError.failure("Caps Lock 매핑 검증에 실패했습니다.") }
     print("Caps Lock → F18 적용·조회 성공: 키보드 \(applied.count)개")
+    let externalBackend = SystemKeyboardBackend()
+    for keyboard in applied {
+      try externalBackend.write(
+        id: keyboard.id,
+        mappings: keyboard.mappings.filter {
+          $0[MappingPolicy.sourceKey] != MappingPolicy.capsLockUsage
+        })
+    }
+    let reset = try backend.read()
+    guard reset.count == applied.count,
+      reset.allSatisfy({ keyboard in
+        keyboard.mappings.allSatisfy { $0[MappingPolicy.sourceKey] != MappingPolicy.capsLockUsage }
+      })
+    else { throw KeyboardError.failure("외부에서 초기화한 매핑을 조회하지 못했습니다.") }
+    try session.reconcile()
+    guard try externalBackend.read() == applied else {
+      throw KeyboardError.failure("초기화한 키보드 매핑을 복구하지 못했습니다.")
+    }
+    print("별도 연결의 매핑 초기화 감지·복구 성공")
     try verifyCapsLock(!originalLock)
     try verifyCapsLock(originalLock)
     print("대문자 잠금 변경·복원 성공")
