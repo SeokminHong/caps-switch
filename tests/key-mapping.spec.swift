@@ -84,6 +84,32 @@ final class KeyMappingTests: XCTestCase {
     XCTAssertEqual(backend.keyboards[1].mappings, [])
   }
 
+  func testInitialReadFailureRecoversAfterConnection() throws {
+    let backend = MemoryBackend(mappings: [previousCaps])
+    backend.readFails = true
+    let session = MappingSession(backend: backend)
+    XCTAssertThrowsError(try session.apply())
+    XCTAssertTrue(session.isActive)
+    backend.readFails = false
+    try session.reconcile()
+    XCTAssertEqual(backend.keyboards[0].mappings, [MappingPolicy.capsToF18])
+    try session.restore()
+    XCTAssertEqual(backend.keyboards[0].mappings, [previousCaps])
+  }
+
+  func testStopAfterInitialReadFailureDoesNotApplyOnConnection() throws {
+    let backend = MemoryBackend(mappings: [previousCaps])
+    backend.readFails = true
+    let session = MappingSession(backend: backend)
+    XCTAssertThrowsError(try session.apply())
+    try session.restore()
+    backend.readFails = false
+    try session.reconcile()
+    XCTAssertFalse(session.isActive)
+    XCTAssertEqual(backend.writeCount, 0)
+    XCTAssertEqual(backend.keyboards[0].mappings, [previousCaps])
+  }
+
   func testReconnectFailureDoesNotBlockOtherKeyboardsOrReplacement() throws {
     let backend = MemoryBackend(mappings: [])
     let session = MappingSession(backend: backend)

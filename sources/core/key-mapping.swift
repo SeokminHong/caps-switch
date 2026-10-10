@@ -98,8 +98,8 @@ public final class MappingSession {
     guard isActive || !hasPendingRestoration else {
       throw KeyboardError.failure("이전 매핑을 먼저 복원해 주세요.")
     }
-    let keyboards = try backend.read()
     isActive = true
+    let keyboards = try backend.read()
     var failures: [String] = []
     for keyboard in keyboards {
       if originals[keyboard.id] == nil {
