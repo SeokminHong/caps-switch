@@ -7,9 +7,9 @@ Caps Lock을 F13~F20 중 선택한 키로 변경하고 Shift+Caps Lock으로 대
 ## 빌드와 실행
 
 ```sh
-cd /Users/seokmin/Documents/personal/caps-switch
+cd caps-switch
 zsh scripts/build-app.sh
-open '/Users/seokmin/Documents/personal/caps-switch/build/Caps Switch.app'
+open 'build/Caps Switch.app'
 ```
 
 앱은 설정 창을 열지 않고 메뉴 막대의 ‘⇪’ 아이콘으로 실행한다. 아이콘의 ‘설정…’을 선택하거나 실행 중인 앱을 다시 열면 설정 창을 표시한다. Caps Lock에 지정할 키를 선택하고 ‘Caps Lock 전환 사용 시작’을 누른다. 첫 실행에는 키 매핑을 변경하지 않는다. 이후 실행에는 저장한 키와 사용 상태를 복원한다. 키를 변경하면 기존 매핑을 복원하고 사용을 중지하므로 새 키로 사용하려면 다시 시작한다.
@@ -44,9 +44,21 @@ SIGKILL 강제 종료나 프로세스 충돌에는 종료 코드를 실행할 �
 
 ## Homebrew 배포
 
-빌드 결과는 Homebrew Cask의 `app "Caps Switch.app"` 항목으로 설치할 수 있는 앱 번들이다. 배포할 때 버전별 ZIP 또는 DMG를 게시하고 다운로드 URL, SHA-256, 버전, 앱 이름을 지정하는 Cask를 개인 tap에 등록한다. 공식 저장소 등록에는 별도의 심사 조건이 있다. [Homebrew Cask Cookbook](https://docs.brew.sh/Cask-Cookbook)
+macOS 14 이상에서 개인 tap의 Formula로 설치한다. Apple Silicon과 Intel을 지원한다. Bottle이 없는 환경에서 소스 빌드하려면 Swift 6 이상을 포함한 Xcode 16 이상이 필요하다.
 
-현재 빌드 스크립트는 로컬 실행용 ad hoc 서명을 사용한다. 외부 배포에는 Developer ID 서명과 공증을 준비하고 지원할 CPU 아키텍처별로 빌드한다. 이 프로젝트에는 tap 등록과 릴리스 게시를 수행하는 설정을 추가하지 않는다.
+```sh
+brew install seokminhong/brew/caps-switch
+open "$(brew --prefix caps-switch)/Caps Switch.app"
+```
+
+앱은 Homebrew 설치 경로에 보관한다. Finder에서 실행하려면 아래 명령으로 응용 프로그램 폴더에 연결한다.
+
+```sh
+mkdir -p ~/Applications
+ln -s "$(brew --prefix)/opt/caps-switch/Caps Switch.app" ~/Applications/
+```
+
+소스 릴리스 태그를 기준으로 앱을 빌드하며 ad hoc 서명을 사용한다. Developer ID 서명과 Apple 공증은 포함하지 않는다. tap 배포는 PR 검증 후 `pr-pull` 워크플로로 진행한다. [Homebrew Formula Cookbook](https://docs.brew.sh/Formula-Cookbook)
 
 ## 검증
 
@@ -54,6 +66,8 @@ SIGKILL 강제 종료나 프로세스 충돌에는 종료 코드를 실행할 �
 xcrun swift test --jobs 2
 xcrun swift-format lint --strict --recursive Package.swift sources tests
 'build/Caps Switch.app/Contents/MacOS/CapsSwitch' --verify
+'build/Caps Switch.app/Contents/MacOS/CapsSwitch' --check-guide
+'build/Caps Switch.app/Contents/MacOS/CapsSwitch' --version
 ```
 
 `--verify`는 연결된 키보드에 Caps Lock → F18을 일시 적용한 뒤 조회하고, 대문자 잠금 상태를 변경한 뒤 원래 상태로 복원한다. Shift+F18 등록·해제도 확인한다. 물리 키 입력과 입력 소스 전환은 앱의 설정을 마친 뒤 직접 확인한다.
