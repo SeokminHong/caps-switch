@@ -74,3 +74,37 @@ private func verifyCapsLock(_ enabled: Bool) throws {
     throw KeyboardError.failure("대문자 잠금 상태가 요청한 값으로 바뀌지 않았습니다.")
   }
 }
+
+func runShortcutVerification() throws {
+  let backend = SystemShortcutBackend()
+  let suite = "me.seokmin.caps-switch.shortcut-verification"
+  guard let defaults = UserDefaults(suiteName: suite) else {
+    throw KeyboardError.failure("검증용 복원 저장소를 만들지 못했습니다.")
+  }
+  let session = InputShortcutSession(backend: backend, defaults: defaults)
+  try session.restore()
+  let original = try backend.read()
+  defer {
+    if !session.hasPendingRestoration { defaults.removePersistentDomain(forName: suite) }
+  }
+  do {
+    try session.apply(key: .f18)
+    let external = SystemShortcutBackend()
+    guard InputShortcutSession.matches(try external.read()["60"], key: .f18) else {
+      throw KeyboardError.failure("별도 연결에서 F18 단축키를 확인하지 못했습니다.")
+    }
+    try session.restore()
+    guard NSDictionary(dictionary: try external.read()).isEqual(to: original) else {
+      throw KeyboardError.failure("복원한 시스템 단축키가 원래 설정과 다릅니다.")
+    }
+    print("이전 입력 소스 선택 → F18 적용·별도 조회·전체 단축키 복원 성공")
+  } catch {
+    let originalError = error
+    do { try session.restore() } catch {
+      throw KeyboardError.failure(
+        "\(originalError.localizedDescription)\n복원 실패: \(error.localizedDescription)\n복원 정보: \(suite)"
+      )
+    }
+    throw originalError
+  }
+}

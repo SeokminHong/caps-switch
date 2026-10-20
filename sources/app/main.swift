@@ -16,6 +16,11 @@ if CommandLine.arguments.contains("--version") {
     fputs("\(error.localizedDescription)\n", stderr)
     exit(1)
   }
+} else if CommandLine.arguments.contains("--verify-shortcut") {
+  do { try runShortcutVerification() } catch {
+    FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))
+    exit(1)
+  }
 } else if CommandLine.arguments.contains("--verify") {
   do { try runVerification() } catch {
     FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))

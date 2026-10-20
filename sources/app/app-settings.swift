@@ -13,7 +13,7 @@ enum AppSettings {
   }
 
   static var mappingEnabled: Bool {
-    get { UserDefaults.standard.bool(forKey: mappingPreference) }
+    get { UserDefaults.standard.object(forKey: mappingPreference) as? Bool ?? true }
     set { UserDefaults.standard.set(newValue, forKey: mappingPreference) }
   }
 }

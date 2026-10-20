@@ -10,7 +10,9 @@ mkdir -p "$app_dir/Contents/MacOS"
 cp "$binary_dir/caps-switch" "$app_dir/Contents/MacOS/CapsSwitch"
 cp "$project_dir/resources/Info.plist" "$app_dir/Contents/Info.plist"
 mkdir -p "$app_dir/Contents/Resources"
-cp -X "$project_dir/docs/images/"*.png "$app_dir/Contents/Resources/"
+rm -f "$app_dir/Contents/Resources/caps-lock-input-source.png" \
+  "$app_dir/Contents/Resources/input-source-shortcut.png" \
+  "$app_dir/Contents/Resources/ThirdPartyNotices.txt"
 /usr/bin/codesign --force --sign - "$app_dir"
 /usr/bin/codesign --verify --strict "$app_dir"
 print -r -- "$app_dir"

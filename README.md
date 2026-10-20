@@ -1,64 +1,56 @@
 # Caps Switch
 
-Caps Lock을 F13~F20 중 선택한 키로 변경하고 Shift+Caps Lock으로 대문자 잠금을 토글하는 macOS 메뉴 막대 앱이다. 기본값은 F18이며 macOS 14 이상에서 실행한다.
+Caps Lock을 누르는 즉시 한영 전환을 요청하고 Shift+Caps Lock으로 대문자 잠금을 토글하는 macOS 메뉴 막대 앱이다. macOS 14 이상에서 실행한다.
 
-손쉬운 사용·입력 모니터링·관리자 권한을 요청하지 않는다. 키 입력 전체를 수신하는 이벤트 감시기, 가상 키보드 드라이버, 네트워크 기능, 외부 패키지를 추가하지 않는다. macOS의 키 매핑 API와 Shift+선택한 펑션 키 전역 단축키를 사용한다.
+## 사용 방법
+
+1. 앱을 실행하고 메뉴 막대 ‘⇪’ → ‘설정…’ → ‘손쉬운 사용 권한 설정…’을 누른다.
+2. 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용에서 Caps Switch를 허용한다.
+
+다른 앱으로 이동하면 자동으로 시작한다. macOS의 Caps Lock 입력 소스 전환 옵션이나 키보드 단축키를 직접 설정할 필요가 없다. 권한이 이미 있으면 실행 즉시 저장한 사용 상태를 복원한다. ‘사용 중지’한 상태는 다음 실행에도 유지하며 ‘사용 시작’으로 다시 켤 수 있다.
+
+앱은 설정 창을 열지 않고 메뉴 막대에서 실행한다. 메뉴의 ‘설정…’을 선택하거나 실행 중인 앱을 다시 열면 설정을 표시한다. 다른 앱으로 이동하면 창을 닫고 참조를 해제한다. 창을 닫아도 한영 전환은 계속 동작한다. ‘로그인 시 자동 실행’으로 로그인 항목을 등록할 수 있다.
+
+## 동작과 복원
+
+앱이 Caps Lock을 F키로 매핑하고 macOS의 ‘이전 입력 소스 선택’을 같은 키로 자동 설정한다. 설정의 ‘Caps Lock에 지정할 키’에서 F13~F20을 선택할 수 있으며 기본값은 F18이다. 사용 중에 키를 변경하면 원래 설정을 복원한 뒤 선택한 키로 자동 재설정한다. 사용 중지 상태에서는 키만 저장한다. 선택한 키가 다른 macOS 단축키와 충돌하면 오류를 표시하며 임의로 다른 키로 바꾸지 않는다. 사용자가 설정한 Caps Lock의 기본 입력 소스 전환 옵션은 변경하지 않는다. 키 매핑 이후의 F키 이벤트를 처리하므로 해당 옵션을 수동으로 끌 필요가 없다.
+
+손쉬운 사용 권한으로 첫 키 누름에서 같은 F키의 누름·뗌 이벤트를 연속으로 보낸다. 실제 키 뗌과 반복 입력을 소비해 중복 전환을 막고, Shift+Caps Lock은 대문자 잠금을 토글한다. 입력 소스를 직접 선택하거나 조합 중인 문자열을 수정하지 않는다. 입력 소스가 두 개이면 두 소스를 전환하고, 더 많으면 macOS의 ‘이전 입력 소스 선택’ 동작을 따른다. 입력 소스 설치·삭제나 언어 목록은 변경하지 않는다.
+
+사용 중지·정상 종료 시 원래 Caps Lock 매핑과 단축키를 복원한다. 다른 키의 매핑과 다른 시스템 단축키는 보존한다. 사용자가 이후 직접 수정한 값도 덮어쓰지 않는다. 단축키의 원래 값과 복원 진행 상태를 저장해 재실행 후에도 복원을 재시도한다. 일부 복원이 실패하면 나머지를 계속 처리하고, 종료를 취소해 다시 시도할 수 있다.
+
+연결된 키보드가 없어도 사용 상태를 유지한다. 키보드 하나의 적용 실패로 다른 키보드의 적용을 중단하지 않는다. 절전·화면 복귀, 사용자 세션 복귀, 키보드 서비스 연결 변경 알림으로 매핑을 복구한다. 복귀 직후 서비스가 준비되지 않은 경우를 위해 알림마다 제한된 횟수로 재시도하며 상시 조회 타이머는 사용하지 않는다. 사용 중지 상태에서는 재적용하지 않는다.
+
+손쉬운 사용 권한 상실을 감지하면 이벤트 처리와 매핑을 중지하고 자동 설정한 단축키를 복원한다. 다시 허용한 뒤 다른 앱으로 이동하면 자동으로 시작한다. 권한 확인도 앱 활성화·복귀 알림으로 처리한다.
+
+화면 잠금 해제에는 비공개 `com.apple.screenIsUnlocked` 알림을 보조적으로 참조하며 공개 절전·화면·세션 복귀 및 키보드 연결 알림을 별도로 처리한다. 단축키 자동 설정은 비공개 `com.apple.symbolichotkeys` 형식과 내부 `activateSettings -u -virtualSession` 도구에 의존한다. 지원되지 않는 macOS에서는 오류를 표시하고 변경한 설정을 복원한다.
+
+입력 소스 전환 완료를 기다리거나 후속 글자를 보류하지 않으므로 모든 입력기·앱에서 전환 완료 시간을 보장하지는 않는다. SIGTERM·SIGINT에는 복원하며 SIGKILL·프로세스 충돌에는 매핑이 남을 수 있다. 키 매핑은 재부팅하면 사라지고, 단축키 복원 정보는 다음 실행까지 보관한다.
+
+이벤트 탭은 키 누름·뗌을 수신하지만 선택한 F키만 가공한다. 입력 내용을 저장하거나 전송하지 않는다. 입력 모니터링·관리자 권한, 가상 키보드 드라이버, 네트워크 기능, 외부 패키지는 사용하지 않는다.
 
 ## 빌드와 실행
 
 ```sh
-cd caps-switch
 zsh scripts/build-app.sh
 open 'build/Caps Switch.app'
 ```
 
-앱은 설정 창을 열지 않고 메뉴 막대의 ‘⇪’ 아이콘으로 실행한다. 아이콘의 ‘설정…’을 선택하거나 실행 중인 앱을 다시 열면 설정 창을 표시한다. Caps Lock에 지정할 키를 선택하고 ‘Caps Lock 전환 사용 시작’을 누른다. 첫 실행에는 키 매핑을 변경하지 않는다. 이후 실행에는 저장한 키와 사용 상태를 복원한다. 키를 변경하면 기존 매핑을 복원하고 사용을 중지하므로 새 키로 사용하려면 다시 시작한다.
-
-## 언어 전환 설정
-
-앱의 ‘키보드 설정 열기’ 버튼으로 macOS 설정을 연다. 키보드 → 텍스트 입력 → 편집… → 모든 입력 소스에서 ‘Caps Lock 키로 ABC 입력 소스 전환’을 비활성화하고 ‘완료’를 클릭한다. 아래 화면에서 해당 스위치가 비활성화된 상태를 확인할 수 있다.
-
-![모든 입력 소스에서 Caps Lock 키로 ABC 입력 소스 전환을 비활성화한 화면](docs/images/caps-lock-input-source.png)
-
-키보드 → 키보드 단축키… → 입력 소스에서 ‘이전 입력 소스 선택’을 활성화한다. 키 조합을 두 번 클릭한 다음 Caps Lock을 눌러 선택한 펑션 키로 등록하고 ‘완료’를 클릭한다. 아래 화면은 F18로 등록한 예시다. ‘입력 메뉴에서 다음 소스 선택’과 구분해서 설정한다.
-
-![입력 소스 단축키의 이전 입력 소스 선택을 F18로 등록한 화면](docs/images/input-source-shortcut.png)
-
-앱은 언어 전환 설정을 안내하고 선택한 키의 등록 상태를 조회한다. macOS의 비공개 설정 형식에는 값을 기록하지 않는다. 한글과 영어만 등록하면 선택한 키로 두 입력 소스를 전환할 수 있다. 매크로를 실행하는 앱에서도 선택한 펑션 키를 단축키로 등록할 수 있다. Caps Switch 자체는 매크로 실행기를 제공하지 않는다.
-
-## 실행과 복원
-
-다른 앱으로 이동하면 설정 창을 자동으로 닫고 창과 안내 이미지의 참조를 해제한다. 다시 설정을 열 때 창과 이미지를 생성한다. 로그인 시 자동 실행에도 설정 창을 표시하지 않는다.
-
-키보드 조회나 매핑 적용에 실패해도 전환 사용 상태를 유지하면서 제한된 횟수로 재시도하고 재연결 알림으로 다시 적용한다. 키보드 하나의 적용 실패가 다른 키보드의 적용을 막지 않는다. 실패하면 설정 창에 오류를 표시한다. 연결된 키보드가 없어도 전환 사용을 시작할 수 있다.
-
-설정 창을 닫아도 앱은 메뉴 막대에서 계속 실행한다. ‘사용 중지’하거나 앱을 정상 종료하면 Caps Lock의 이전 매핑을 복원한다. 다른 키의 매핑은 보존한다. 전환 사용 중에는 절전·화면 복귀, 사용자 세션 복귀, 키보드 서비스 연결 변경 알림으로 매핑을 복구한다. 계속 반복하는 조회 타이머는 실행하지 않는다. 복귀 직후 키보드가 준비되지 않은 경우를 위해 알림마다 제한된 횟수로 확인한다. 사용 중지 상태에서는 적용하지 않으며 다른 앱이 지정한 Caps Lock 매핑은 자동 복구로 덮어쓰지 않는다.
-
-화면 잠금 해제 시에는 `com.apple.screenIsUnlocked` 알림도 참조한다. Apple이 공개 명세로 보장하는 알림은 아니므로 macOS 버전에 따라 이 알림을 받지 못할 수 있다. 절전·화면 복귀와 사용자 세션 복귀, 키보드 서비스 연결 알림은 별도로 처리한다.
-
-Shift+Caps Lock 토글은 앱이 실행 중일 때 동작한다. 정상 종료와 SIGTERM·SIGINT 종료 요청에는 매핑을 복원한다. 키보드 하나의 복원이 실패해도 나머지 키보드는 계속 복원하고 실패한 키보드의 원래 값을 보존한다. 복원 실패 시 종료를 취소하므로 사용 중지 버튼이나 종료 메뉴로 다시 시도할 수 있다. 다른 앱이 변경한 Caps Lock 매핑은 유지한다.
-
-SIGKILL 강제 종료나 프로세스 충돌에는 종료 코드를 실행할 수 없으므로 키 매핑이 남을 수 있으며 재부팅하면 사라진다. 별도의 복원용 상주 프로세스는 실행하지 않는다. macOS에서 등록한 언어 전환 단축키는 앱 종료 후에도 유지한다.
-
-‘로그인 시 자동 실행’을 선택하면 `SMAppService.mainApp`으로 로그인 항목을 등록한다. macOS가 승인을 요구하면 로그인 항목 설정 화면을 연다. 선택을 해제하면 등록을 취소한다. 앱 종료는 자동 실행 등록을 취소하지 않는다. [Apple 로그인 항목 API](https://developer.apple.com/documentation/servicemanagement/smappservice/mainapp)
-
-## Homebrew 배포
-
-macOS 14 이상에서 개인 tap의 Formula로 설치한다. Apple Silicon과 Intel을 지원한다. Bottle이 없는 환경에서 소스 빌드하려면 Swift 6 이상을 포함한 Xcode 16 이상이 필요하다.
+## Homebrew 설치
 
 ```sh
 brew install seokminhong/brew/caps-switch
 open "$(brew --prefix caps-switch)/Caps Switch.app"
 ```
 
-앱은 Homebrew 설치 경로에 보관한다. Finder에서 실행하려면 아래 명령으로 응용 프로그램 폴더에 연결한다.
+Apple Silicon과 Intel을 지원한다. Bottle이 없으면 Swift 6 이상을 포함한 Xcode 16 이상으로 소스 빌드한다. Finder에서 실행하려면 응용 프로그램 폴더에 연결한다.
 
 ```sh
 mkdir -p ~/Applications
 ln -s "$(brew --prefix)/opt/caps-switch/Caps Switch.app" ~/Applications/
 ```
 
-소스 릴리스 태그를 기준으로 앱을 빌드하며 ad hoc 서명을 사용한다. Developer ID 서명과 Apple 공증은 포함하지 않는다. tap 배포는 PR 검증 후 `pr-pull` 워크플로로 진행한다. [Homebrew Formula Cookbook](https://docs.brew.sh/Formula-Cookbook)
+소스 릴리스 태그를 기준으로 빌드하며 ad hoc 서명을 사용한다. Developer ID 서명과 Apple 공증은 포함하지 않는다. 앱 업데이트 후 macOS가 손쉬운 사용 권한을 다시 요구할 수 있다. tap 배포는 PR 검증 후 `pr-pull` 워크플로로 진행한다.
 
 ## 검증
 
@@ -66,13 +58,17 @@ ln -s "$(brew --prefix)/opt/caps-switch/Caps Switch.app" ~/Applications/
 xcrun swift test --jobs 2
 xcrun swift-format lint --strict --recursive Package.swift sources tests
 'build/Caps Switch.app/Contents/MacOS/CapsSwitch' --verify
+'build/Caps Switch.app/Contents/MacOS/CapsSwitch' --verify-shortcut
 'build/Caps Switch.app/Contents/MacOS/CapsSwitch' --check-guide
-'build/Caps Switch.app/Contents/MacOS/CapsSwitch' --version
 ```
 
-`--verify`는 연결된 키보드에 Caps Lock → F18을 일시 적용한 뒤 조회하고, 대문자 잠금 상태를 변경한 뒤 원래 상태로 복원한다. Shift+F18 등록·해제도 확인한다. 물리 키 입력과 입력 소스 전환은 앱의 설정을 마친 뒤 직접 확인한다.
+`--verify`는 연결된 키보드에 Caps Lock → F18을 일시 적용하고 별도 연결로 매핑을 초기화한 뒤 복구·복원을 확인한다. 대문자 잠금 변경·복원과 Shift+F18 등록·해제도 확인한다. `--verify-shortcut`은 실제 단축키의 F18 적용·별도 조회와 전체 설정 복원을 확인한다. 앱 사용을 중지한 상태에서 실행한다. `--check-guide`는 빌드한 앱의 권한 안내와 설정 화면 배치를 확인한다.
+
+실제 키 입력 검증에서는 macOS의 기존 Caps Lock 옵션과 단축키를 그대로 두고 앱에 손쉬운 사용 권한만 허용한다. Caps Lock을 누른 채 다음 글자를 입력하고, 길게 눌러도 전환이 반복되지 않는지와 Shift+Caps Lock 동작을 확인한다. 실제 절전·잠금·재연결 후 복구와 사용 중지 후 미적용도 별도로 확인한다.
 
 ## 참고 자료
 
+
 - [Apple TN2450: 키 매핑 API](https://developer.apple.com/library/archive/technotes/tn2450/)
 - [Apple IOHIDSetModifierLockState](https://developer.apple.com/documentation/iokit/1555420-iohidsetmodifierlockstate)
+- [Apple 로그인 항목 API](https://developer.apple.com/documentation/servicemanagement/smappservice/mainapp)

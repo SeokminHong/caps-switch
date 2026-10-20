@@ -81,27 +81,6 @@ final class InputShortcutTests: XCTestCase {
     XCTAssertFalse(session.hasPendingRestoration)
   }
 
-  func testChoosesUnoccupiedKeyWithoutChangingOtherShortcuts() throws {
-    try session.apply(key: .f18)
-    let conflict = backend.values["60"]
-    try session.restore()
-    backend.values["99"] = conflict
-    let before = backend.values
-    XCTAssertEqual(try session.availableKey(preferred: .f18), .f13)
-    XCTAssertTrue(NSDictionary(dictionary: backend.values).isEqual(to: before))
-  }
-
-  func testReportsWhenAllFunctionKeysAreReserved() throws {
-    for key in FunctionKey.allCases {
-      try session.apply(key: key)
-      let conflict = backend.values["60"]
-      try session.restore()
-      backend.values["reserved-\(key.name)"] = conflict
-    }
-    XCTAssertThrowsError(try session.availableKey(preferred: .f18))
-    XCTAssertFalse(session.hasPendingRestoration)
-  }
-
   func testChangingKeyKeepsOriginalRestorationValue() throws {
     try session.apply(key: .f18)
     try session.apply(key: .f20)

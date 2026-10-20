@@ -85,19 +85,6 @@ public final class InputShortcutSession {
     return NSDictionary(dictionary: ["entry": left]).isEqual(to: ["entry": right])
   }
 
-  public func availableKey(preferred: FunctionKey) throws -> FunctionKey {
-    let shortcuts = try backend.read()
-    let candidates = [preferred] + FunctionKey.allCases.filter { $0 != preferred }
-    guard
-      let key = candidates.first(where: { key in
-        !shortcuts.contains { id, entry in id != previousSource && Self.matches(entry, key: key) }
-      })
-    else {
-      throw KeyboardError.failure("한영 전환에 사용할 수 있는 F13~F20 키가 없습니다. 다른 단축키 앱과의 충돌을 확인해 주세요.")
-    }
-    return key
-  }
-
   public func apply(key: FunctionKey) throws {
     if let journal = defaults.dictionary(forKey: journalKey), journal["restoring"] as? Bool == true
     {
