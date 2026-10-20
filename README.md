@@ -70,7 +70,6 @@ xcrun swift-format lint --strict --recursive Package.swift sources tests
 
 ## 참고 자료
 
-
 - [Apple TN2450: 키 매핑 API](https://developer.apple.com/library/archive/technotes/tn2450/)
 - [Apple IOHIDSetModifierLockState](https://developer.apple.com/documentation/iokit/1555420-iohidsetmodifierlockstate)
 - [Apple 로그인 항목 API](https://developer.apple.com/documentation/servicemanagement/smappservice/mainapp)
