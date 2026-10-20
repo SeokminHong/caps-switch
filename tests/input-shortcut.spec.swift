@@ -108,6 +108,37 @@ final class InputShortcutTests: XCTestCase {
     XCTAssertFalse(session.hasPendingRestoration)
   }
 
+  func testNativeFunctionFlagIsAcceptedAndOriginalShortcutIsRestored() throws {
+    backend.addFunctionFlag = true
+    try session.apply(key: .f18)
+    XCTAssertTrue(session.isConfigured(for: .f18))
+    try session.apply(key: .f18)
+    try session.restore()
+    XCTAssertTrue(
+      NSDictionary(dictionary: backend.values["60"] as! [String: Any]).isEqual(to: original))
+    XCTAssertFalse(session.hasPendingRestoration)
+  }
+
+  func testNativeFunctionFlagDoesNotHideExternalModifierChanges() throws {
+    try session.apply(key: .f18)
+    let external: [String: Any] = [
+      "enabled": true,
+      "value": ["type": "standard", "parameters": [65535, 79, 8_388_608 | 262144]],
+    ]
+    backend.values["60"] = external
+    try session.restore()
+    XCTAssertTrue(
+      NSDictionary(dictionary: backend.values["60"] as! [String: Any]).isEqual(to: external))
+  }
+
+  func testFunctionFlagShortcutsAreDetectedAsConflicts() throws {
+    backend.values["99"] = [
+      "enabled": true, "value": ["type": "standard", "parameters": [65535, 79, 8_388_608]],
+    ]
+    XCTAssertThrowsError(try session.apply(key: .f18))
+    XCTAssertFalse(session.hasPendingRestoration)
+  }
+
   func testApplyActivationFailureCanBeRolledBack() throws {
     backend.failActivation = true
     XCTAssertThrowsError(try session.apply(key: .f18))
@@ -125,6 +156,7 @@ private final class MemoryShortcuts: ShortcutBackend {
   var ignoreWrite = false
   var failActivation = false
   var activations = 0
+  var addFunctionFlag = false
   func read() throws -> [String: Any] { values }
   func write(_ shortcuts: [String: Any]) throws {
     if failWrite { throw KeyboardError.failure("write failure") }
@@ -133,5 +165,14 @@ private final class MemoryShortcuts: ShortcutBackend {
   func activate() throws {
     activations += 1
     if failActivation { throw KeyboardError.failure("activation failure") }
+    if addFunctionFlag,
+      let entry = values["60"] as? [String: Any],
+      let value = entry["value"] as? [String: Any],
+      let parameters = value["parameters"] as? [Int], parameters[1] == 79
+    {
+      values["60"] = [
+        "enabled": true, "value": ["type": "standard", "parameters": [65535, 79, 8_388_608]],
+      ]
+    }
   }
 }

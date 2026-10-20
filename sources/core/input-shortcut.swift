@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 public protocol ShortcutBackend {
@@ -76,13 +77,29 @@ public final class InputShortcutSession {
       let value = entry["value"] as? [String: Any],
       let parameters = value["parameters"] as? [NSNumber], parameters.count == 3
     else { return false }
-    return parameters[1].uint32Value == key.keyCode && parameters[2].intValue == 0
+    let modifiers = parameters[2].uint64Value
+    return parameters[1].uint32Value == key.keyCode
+      && modifiers & ~CGEventFlags.maskSecondaryFn.rawValue == 0
   }
 
   private func equal(_ left: Any?, _ right: Any?) -> Bool {
     guard let left else { return right == nil }
     guard let right else { return false }
-    return NSDictionary(dictionary: ["entry": left]).isEqual(to: ["entry": right])
+    return NSDictionary(dictionary: ["entry": Self.normalized(left)])
+      .isEqual(to: ["entry": Self.normalized(right)])
+  }
+
+  private static func normalized(_ raw: Any) -> Any {
+    guard var entry = raw as? [String: Any],
+      var value = entry["value"] as? [String: Any],
+      var parameters = value["parameters"] as? [NSNumber], parameters.count == 3,
+      let key = FunctionKey.allCases.first(where: { $0.keyCode == parameters[1].uint32Value }),
+      matches(entry, key: key)
+    else { return raw }
+    parameters[2] = 0
+    value["parameters"] = parameters
+    entry["value"] = value
+    return entry
   }
 
   public func apply(key: FunctionKey) throws {
