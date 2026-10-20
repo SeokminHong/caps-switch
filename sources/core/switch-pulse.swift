@@ -1,4 +1,3 @@
-import ApplicationServices
 import CoreGraphics
 import Foundation
 
@@ -23,12 +22,11 @@ public struct SwitchPressGate {
 }
 
 public final class SwitchPulse {
-  public static var isTrusted: Bool { AXIsProcessTrusted() }
+  private static let permission = AccessibilityPermission()
 
-  public static func requestPermission() {
-    let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
-    _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
-  }
+  public static var isTrusted: Bool { permission.isTrusted }
+
+  public static func requestPermission() { permission.requestIfNeeded() }
 
   private var tap: CFMachPort?
   private var source: CFRunLoopSource?

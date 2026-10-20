@@ -295,7 +295,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         AppSettings.mappingEnabled = true
         if !SwitchPulse.isTrusted {
           awaitingPermission = true
-          openAccessibilitySettings()
+          mappingError = nil
         } else {
           try enableMapping()
         }
